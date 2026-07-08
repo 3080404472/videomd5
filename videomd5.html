@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>视频MD5改码工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0c10;--card:#14171f;--card2:#1a1e28;--border:#252a36;
+  --accent:#5b5ff6;--accent2:#8b8eff;--green:#2dd4a0;--red:#f06565;
+  --text:#e4e4e8;--dim:#6b7280;--dim2:#4b5563;
+  --radius:12px;
+}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+.app{max-width:540px;margin:0 auto;padding:0 16px 60px;min-height:100vh}
+
+.header{text-align:center;padding:28px 0 12px}
+.header h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:var(--dim);margin-top:3px;font-size:12px;letter-spacing:.3px}
+.header .badge{display:inline-block;margin-top:6px;padding:3px 10px;background:rgba(45,212,160,.1);color:var(--green);border-radius:6px;font-size:11px;font-weight:600}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:12px}
+
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:40px 16px;text-align:center;cursor:pointer;transition:all .25s}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(91,95,246,.04)}
+.drop-zone.drag-over .dz-icon{transform:scale(1.12)}
+.dz-icon{font-size:38px;margin-bottom:6px;transition:transform .25s;line-height:1}
+.dz-text{font-size:13px;color:var(--dim);line-height:1.7}
+.dz-text em{color:var(--accent);font-style:normal;text-decoration:underline}
+#fileInput{display:none}
+
+.file-info{display:none;margin-top:14px;background:var(--card2);border-radius:10px;padding:14px 16px}
+.file-info.show{display:block}
+.fi-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:12px}
+.fi-label{color:var(--dim);flex-shrink:0;margin-right:12px}
+.fi-val{color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.fi-md5{font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:11px;letter-spacing:.3px;word-break:break-all;text-align:left;color:var(--accent2);margin-top:4px;padding:6px 8px;background:rgba(91,95,246,.06);border-radius:6px}
+.fi-md5-label{font-size:11px;color:var(--dim);margin-bottom:2px}
+
+.section-label{font-size:13px;font-weight:600;margin-bottom:8px}
+.level-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.level-btn{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:14px 8px;cursor:pointer;transition:all .2s;text-align:center}
+.level-btn:hover{border-color:var(--accent);background:rgba(91,95,246,.06)}
+.level-btn.active{border-color:var(--accent);background:rgba(91,95,246,.1)}
+.level-btn .lv-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.level-btn .lv-desc{font-size:10px;color:var(--dim);line-height:1.4}
+.level-btn.active .lv-name{color:var(--accent2)}
+.level-btn .lv-tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:4px;background:rgba(91,95,246,.12);color:var(--accent2)}
+.level-btn.lv-recommend .lv-tag{background:rgba(45,212,160,.12);color:var(--green)}
+
+.btn-row{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;outline:none}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(91,95,246,.3);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-ghost{background:transparent;color:var(--dim);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
+
+.result-card{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px;transition:border-color .3s}
+.result-card.rc-done{border-color:rgba(45,212,160,.3)}
+.result-card.rc-error{border-color:rgba(240,101,101,.3)}
+.rc-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rc-filename{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.rc-badge{font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.badge-done{background:rgba(45,212,160,.1);color:var(--green)}
+.badge-error{background:rgba(240,101,101,.1);color:var(--red)}
+.rc-info{font-size:11px;color:var(--dim);margin-top:8px}
+.rc-compare{margin-top:10px;padding:10px 12px;background:rgba(0,0,0,.2);border-radius:8px}
+.rc-compare-row{display:flex;align-items:flex-start;gap:8px;font-size:11px;margin-bottom:6px}
+.rc-compare-row:last-child{margin-bottom:0}
+.rc-compare-row .cc-label{color:var(--dim);flex-shrink:0;min-width:50px}
+.rc-compare-row .cc-val{font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:10px;word-break:break-all;letter-spacing:.2px}
+.cc-old{color:var(--red)}
+.cc-new{color:var(--green)}
+.cc-arrow{color:var(--dim);flex-shrink:0}
+.btn-dl{display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:9px 20px;background:rgba(45,212,160,.08);color:var(--green);border:1px solid rgba(45,212,160,.2);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .2s}
+.btn-dl:hover{background:rgba(45,212,160,.15)}
+
+.processing-overlay{display:none;position:fixed;inset:0;background:rgba(10,12,16,.7);z-index:50;align-items:center;justify-content:center}
+.processing-overlay.show{display:flex}
+.processing-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 32px;text-align:center;max-width:280px}
+.processing-box .pb-spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.processing-box .pb-text{font-size:13px;color:var(--dim)}
+
+@media(max-width:360px){
+  .level-grid{grid-template-columns:1fr}
+  .header h1{font-size:19px}
+  .card{padding:16px}
+  .drop-zone{padding:28px 10px}
+}
+</style>
+</head>
+<body>
+
+<div class="processing-overlay" id="processingOverlay">
+  <div class="processing-box">
+    <div class="pb-spinner"></div>
+    <div class="pb-text" id="processingText">正在处理...</div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="header">
+    <h1>视频 MD5 改码工具</h1>
+    <p>拖拽视频，一键生成新 MD5，解决素材卡审</p>
+    <div class="badge">零网络依赖 · 纯本地处理 · 秒级完成</div>
+  </div>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <div class="dz-icon">&#128451;</div>
+      <div class="dz-text">拖拽视频到此处<br>或 <em>点击选择文件</em></div>
+    </div>
+    <input type="file" id="fileInput" accept="video/*">
+    <div class="file-info" id="fileInfo">
+      <div class="fi-row"><span class="fi-label">文件名</span><span class="fi-val" id="fiName">-</span></div>
+      <div class="fi-row"><span class="fi-label">大小</span><span class="fi-val" id="fiSize">-</span></div>
+      <div class="fi-row"><span class="fi-label">分辨率</span><span class="fi-val" id="fiRes">-</span></div>
+      <div class="fi-row"><span class="fi-label">时长</span><span class="fi-val" id="fiDur">-</span></div>
+      <div class="fi-md5-label">原始 MD5</div>
+      <div class="fi-md5" id="fiMd5">计算中...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">改码级别</div>
+    <div class="level-grid" id="levelGrid">
+      <div class="level-btn lv-recommend active" data-level="metadata">
+        <div class="lv-name">快速改码</div>
+        <div class="lv-desc">仅改元数据，画质无损</div>
+        <div class="lv-tag">推荐</div>
+      </div>
+      <div class="level-btn" data-level="inject">
+        <div class="lv-name">标准改码</div>
+        <div class="lv-desc">注入随机数据，更彻底</div>
+      </div>
+      <div class="level-btn" data-level="structure">
+        <div class="lv-name">深度改码</div>
+        <div class="lv-desc">结构+元数据全改写</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="startBtn" disabled>开始改码</button>
+      <button class="btn btn-ghost" id="clearBtn">清空</button>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="section-label">改码结果</div>
+    <div id="resultList"></div>
+  </div>
+</div>
+
+<script>
+// ========== 内联 MD5 实现 ==========
+(function(){
+var hex_chr='0123456789abcdef'.split('');
+function rhex(n){var s='';for(var j=0;j<4;j++)s+=hex_chr[(n>>(j*8+4))&0x0f]+hex_chr[(n>>(j*8))&0x0f];return s}
+function add32(a,b){return(a+b)&0xFFFFFFFF}
+function cmn(q,a,b,x,s,t){a=add32(add32(a,q),add32(x,t));return add32((a<<s)|(a>>>32-s)),b)}
+function ff(a,b,c,d,x,s,t){return cmn((b&c)|((~b)&d),a,b,x,s,t)}
+function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&(~d)),a,b,x,s,t)}
+function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t)}
+function ii(a,b,c,d,x,s,t){return cmn(c^(b|(~d)),a,b,x,s,t)}
+function md5cycle(x,k){var a=x[0],b=x[1],c=x[2],d=x[3];a=ff(a,b,c,d,k[0],7,-680876936);d=ff(d,a,b,c,k[1],12,-389564586);c=ff(c,d,a,b,k[2],17,606105819);b=ff(b,c,d,a,k[3],22,-1044525330);a=ff(a,b,c,d,k[4],7,-176418897);d=ff(d,a,b,c,k[5],12,1200080426);c=ff(c,d,a,b,k[6],17,-1473231341);b=ff(b,c,d,a,k[7],22,-45705983);a=ff(a,b,c,d,k[8],7,1770035416);d=ff(d,a,b,c,k[9],12,-1958414417);c=ff(c,d,a,b,k[10],17,-42063);b=ff(b,c,d,a,k[11],22,-1990404162);a=ff(a,b,c,d,k[12],7,1804603682);d=ff(d,a,b,c,k[13],12,-40341101);c=ff(c,d,a,b,k[14],17,-1502002290);b=ff(b,c,d,a,k[15],22,1236535329);a=gg(a,b,c,d,k[1],5,-165796510);d=gg(d,a,b,c,k[6],9,-1069501632);c=gg(c,d,a,b,k[11],14,643717713);b=gg(b,c,d,a,k[0],20,-373897302);a=gg(a,b,c,d,k[5],5,-701558691);d=gg(d,a,b,c,k[10],9,38016083);c=gg(c,d,a,b,k[15],14,-660478335);b=gg(b,c,d,a,k[4],20,-405537848);a=gg(a,b,c,d,k[9],5,76029189);d=gg(d,a,b,c,k[14],9,-640364487);c=gg(c,d,a,b,k[3],14,-421815835);b=gg(b,c,d,a,k[8],20,1309151649);a=gg(a,b,c,d,k[13],5,-4149444);d=gg(d,a,b,c,k[2],9,286233620);c=gg(c,d,a,b,k[7],14,-173439988);b=gg(b,c,d,a,k[12],20,2415788128);a=hh(a,b,c,d,k[5],4,-127630243);d=hh(d,a,b,c,k[8],11,-1555805516);c=hh(c,d,a,b,k[11],16,390540271);b=hh(b,c,d,a,k[14],23,609856706);a=hh(a,b,c,d,k[1],4,-327245625);d=hh(d,a,b,c,k[4],11,1732584193);c=hh(c,d,a,b,k[7],16,-718406703);b=hh(b,c,d,a,k[10],23,-42597538);a=hh(a,b,c,d,k[13],4,275428736);d=hh(d,a,b,c,k[0],11,-1825699442);c=hh(c,d,a,b,k[3],16,-685439906);b=hh(b,c,d,a,k[6],23,76029189);a=hh(a,b,c,d,k[9],4,-35309556);d=hh(d,a,b,c,k[12],11,-1533428576);c=hh(c,d,a,b,k[15],16,1272893353);b=hh(b,c,d,a,k[2],23,-155497632);a=ii(a,b,c,d,k[0],6,-198630844);d=ii(d,a,b,c,k[7],10,1126891415);c=ii(c,d,a,b,k[14],15,-1416231301);b=ii(b,c,d,a,k[5],21,-57434055);a=ii(a,b,c,d,k[12],6,1700485571);d=ii(d,a,b,c,k[3],10,-1894986606);c=ii(c,d,a,b,k[10],15,-1051523);b=ii(b,c,d,a,k[1],21,-2054922799);a=ii(a,b,c,d,k[8],6,1873313359);d=ii(d,a,b,c,k[15],10,-30611744);c=ii(c,d,a,b,k[6],15,1560198380);b=ii(b,c,d,a,k[13],21,1309151649);a=ii(a,b,c,d,k[4],6,-145523070);d=ii(d,a,b,c,k[11],10,-1120210379);c=ii(c,d,a,b,k[2],15,718787259);b=ii(b,c,d,a,k[9],21,1309151649);x[0]=add32(a,x[0]);x[1]=add32(b,x[1]);x[2]=add32(c,x[2]);x[3]=add32(d,x[3])}
+function md5blk(s,i){var md5blks=[];for(var j=0;j<64;j+=4)md5blks[j>>2]=s.charCodeAt(i+j)+(s.charCodeAt(i+j+1)<<8)+(s.charCodeAt(i+j+2)<<16)+(s.charCodeAt(i+j+3)<<24);return md5blks}
+var md5_str=function(s){var n=s.length,state=[1732584193,-271733879,-1732584194,271733878],i,length,tail,tmp,lo,hi;for(i=64;i<=n;i+=64)md5cycle(state,md5blk(s,i-64));tmp=s.substring(i-64);lo=n;hi=Math.floor(n/4294967296);tail=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];for(i=0;i<tmp.length;i++)tail[i>>2]|=tmp.charCodeAt(i)<<(i%4<<3);tail[i>>2]|=0x80<<(i%4<<3);if(i>55){md5cycle(state,tail);for(i=0;i<16;i++)tail[i]=0}tail[14]=lo*8;tail[15]=((lo*8)>>>0>0x1FFFFFFF?hi+1:hi);md5cycle(state,tail);return rhex(state[0])+rhex(state[1])+rhex(state[2])+rhex(state[3])};
+window.MD5={compute:function(arrBuf){var u8=new Uint8Array(arrBuf);var s='';for(var i=0;i<u8.length;i++)s+=String.fromCharCode(u8[i]);return md5_str(s)}};
+})();
+
+// ========== MD5 计算（分块） ==========
+function computeMD5(file) {
+  return new Promise(function(resolve, reject) {
+    var chunkSize = 4 * 1024 * 1024;
+    var chunks = Math.ceil(file.size / chunkSize);
+    var currentChunk = 0;
+    var parts = [];
+    function loadNext() {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        parts.push(new Uint8Array(e.target.result));
+        currentChunk++;
+        if (currentChunk < chunks) { loadNext(); }
+        else {
+          var totalLen = 0;
+          for (var i = 0; i < parts.length; i++) totalLen += parts[i].length;
+          var combined = new Uint8Array(totalLen);
+          var offset = 0;
+          for (var i = 0; i < parts.length; i++) { combined.set(parts[i], offset); offset += parts[i].length; }
+          resolve(MD5.compute(combined.buffer));
+        }
+      };
+      reader.onerror = reject;
+      var start = currentChunk * chunkSize;
+      var end = Math.min(start + chunkSize, file.size);
+      reader.readAsArrayBuffer(file.slice(start, end));
+    }
+    loadNext();
+  });
+}
+
+// ========== 视频探测 ==========
+function probeVideo(file) {
+  return new Promise(function(resolve) {
+    var video = document.createElement('video');
+    video.preload = 'metadata';
+    var url = URL.createObjectURL(file);
+    video.src = url;
+    var timeout = setTimeout(function() { resolve({width:0,height:0,duration:0}); URL.revokeObjectURL(url); }, 5000);
+    video.onloadedmetadata = function() { clearTimeout(timeout); resolve({width:video.videoWidth||0,height:video.videoHeight||0,duration:video.duration||0}); URL.revokeObjectURL(url); };
+    video.onerror = function() { clearTimeout(timeout); resolve({width:0,height:0,duration:0}); URL.revokeObjectURL(url); };
+  });
+}
+
+// ========== MP4 盒子操作 ==========
+function readU32(buf, off) { return (buf[off]<<24)|(buf[off+1]<<16)|(buf[off+2]<<8)|buf[off+3]; }
+function writeU32(buf, off, val) { buf[off]=(val>>>24)&0xFF; buf[off+1]=(val>>>16)&0xFF; buf[off+2]=(val>>>8)&0xFF; buf[off+3]=val&0xFF; }
+function randomBytes(len) { var a=new Uint8Array(len); crypto.getRandomValues(a); return a; }
+function randomHex(len) { var b=randomBytes(Math.ceil(len/2)); var h=''; for(var i=0;i<b.length;i++)h+=('0'+b[i].toString(16)).slice(-2); return h.slice(0,len); }
+
+// 递归查找 MP4 box
+function findBoxes(u8, boxType, start, end) {
+  var results = [];
+  if (!end) end = u8.length;
+  var pos = start || 0;
+  var containers = ['moov','trak','mdia','minf','stbl','edts','udta','meta','sinf','schi','mvex'];
+  while (pos < end - 8) {
+    var size = readU32(u8, pos);
+    var type = String.fromCharCode(u8[pos+4],u8[pos+5],u8[pos+6],u8[pos+7]);
+    if (size === 0) size = end - pos;
+    else if (size === 1) { pos += 16; continue; }
+    if (size < 8) break;
+    if (type === boxType) results.push({offset:pos, size:size, dataOffset:pos+8, dataSize:size-8});
+    if (containers.indexOf(type) >= 0) {
+      var inner = pos + 8 + (type === 'meta' ? 4 : 0);
+      results = results.concat(findBoxes(u8, boxType, inner, pos + size));
+    }
+    pos += size;
+  }
+  return results;
+}
+
+// 创建自定义 MP4 box（播放器会忽略未知类型）
+function createBox(type, data) {
+  var box = new Uint8Array(8 + data.length);
+  writeU32(box, 0, 8 + data.length);
+  for (var i = 0; i < 4; i++) box[4+i] = type.charCodeAt(i);
+  box.set(data, 8);
+  return box;
+}
+
+// 修改 MP4 改变 MD5
+function modifyMP4(buf, level) {
+  var u8 = new Uint8Array(buf);
+  var mods = []; // {offset, data} 或 {append: Uint8Array}
+
+  // --- 修改 udta 区域 ---
+  var udtas = findBoxes(u8, 'udta');
+  for (var ui = 0; ui < udtas.length; ui++) {
+    var udta = udtas[ui];
+    var pos = udta.dataOffset;
+    var end = udta.offset + udta.size;
+    while (pos < end - 8) {
+      var s = readU32(u8, pos);
+      var t = String.fromCharCode(u8[pos+4],u8[pos+5],u8[pos+6],u8[pos+7]);
+      if (s < 8 || pos + s > end) break;
+      // 覆盖元数据子 box 的 data 区域
+      if (s > 16) {
+        var fillStart = pos + 16;
+        var fillLen = s - 16;
+        mods.push({offset: fillStart, data: randomBytes(fillLen)});
+      }
+      pos += s;
+    }
+  }
+
+  // --- 修改 mvhd/tkhd 时间戳（深度模式） ---
+  if (level === 'structure') {
+    var moovs = findBoxes(u8, 'moov');
+    for (var mi = 0; mi < moovs.length; mi++) {
+      var moov = moovs[mi];
+      var mvhds = findBoxes(u8, 'mvhd', moov.dataOffset, moov.offset + moov.size);
+      for (var i = 0; i < mvhds.length; i++) {
+        var mvhd = mvhds[i];
+        var ver = u8[mvhd.dataOffset];
+        var nowT = Math.floor(Date.now()/1000) + Math.floor(Math.random()*86400);
+        var tb = new Uint8Array(4); writeU32(tb, 0, nowT);
+        if (ver === 0 && mvhd.dataSize >= 12) {
+          mods.push({offset: mvhd.dataOffset+4, data: tb});
+          mods.push({offset: mvhd.dataOffset+8, data: tb});
+          // next_track_ID
+          if (mvhd.dataSize >= 4) {
+            var nid = readU32(u8, mvhd.offset+mvhd.size-4);
+            var nb = new Uint8Array(4); writeU32(nb, 0, nid+1+Math.floor(Math.random()*100));
+            mods.push({offset: mvhd.offset+mvhd.size-4, data: nb});
+          }
+        } else if (ver === 1 && mvhd.dataSize >= 28) {
+          mods.push({offset: mvhd.dataOffset+12, data: tb});
+          mods.push({offset: mvhd.dataOffset+20, data: tb});
+        }
+      }
+      // tkhd
+      var tkhds = findBoxes(u8, 'tkhd', moov.dataOffset, moov.offset + moov.size);
+      for (var i = 0; i < tkhds.length; i++) {
+        var tkhd = tkhds[i];
+        var ver = u8[tkhd.dataOffset];
+        var nowT = Math.floor(Date.now()/1000) + Math.floor(Math.random()*86400);
+        var tb = new Uint8Array(4); writeU32(tb, 0, nowT);
+        if (ver === 0 && tkhd.dataSize >= 12) {
+          mods.push({offset: tkhd.dataOffset+4, data: tb});
+          mods.push({offset: tkhd.dataOffset+8, data: tb});
+        } else if (ver === 1 && tkhd.dataSize >= 28) {
+          mods.push({offset: tkhd.dataOffset+12, data: tb});
+          mods.push({offset: tkhd.dataOffset+20, data: tb});
+        }
+      }
+    }
+  }
+
+  // --- 追加随机 box ---
+  var appendSizes = {metadata: 40, inject: 128, structure: 256};
+  mods.push({append: createBox('uuid', randomBytes(appendSizes[level] || 64))});
+
+  // 应用修改
+  var appendLen = 0;
+  for (var i = 0; i < mods.length; i++) if (mods[i].append) appendLen += mods[i].append.length;
+  var result = new Uint8Array(u8.length + appendLen);
+  result.set(u8);
+  for (var i = 0; i < mods.length; i++) {
+    if (mods[i].offset !== undefined && mods[i].data) result.set(mods[i].data, mods[i].offset);
+  }
+  var aoff = u8.length;
+  for (var i = 0; i < mods.length; i++) {
+    if (mods[i].append) { result.set(mods[i].append, aoff); aoff += mods[i].append.length; }
+  }
+  return result;
+}
+
+// 非 MP4 格式处理
+function modifyGeneric(buf, level) {
+  var u8 = new Uint8Array(buf);
+  var sizes = {metadata:16, inject:64, structure:128};
+  var extra = (sizes[level] || 32) + 8;
+  var result = new Uint8Array(u8.length + extra);
+  result.set(u8);
+  result.set(randomBytes(extra), u8.length);
+  return result;
+}
+
+// ========== UI ==========
+var currentFile = null, originalMD5 = '', selectedLevel = 'metadata';
+var dropZone = document.getElementById('dropZone');
+var fileInput = document.getElementById('fileInput');
+var fileInfoEl = document.getElementById('fileInfo');
+var startBtn = document.getElementById('startBtn');
+var clearBtn = document.getElementById('clearBtn');
+var resultCard = document.getElementById('resultCard');
+var resultList = document.getElementById('resultList');
+
+document.querySelectorAll('.level-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.level-btn').forEach(function(b){b.classList.remove('active')});
+    btn.classList.add('active');
+    selectedLevel = btn.dataset.level;
+  });
+});
+
+dropZone.addEventListener('dragover', function(e){e.preventDefault();dropZone.classList.add('drag-over')});
+dropZone.addEventListener('dragleave', function(){dropZone.classList.remove('drag-over')});
+dropZone.addEventListener('drop', function(e){e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])});
+dropZone.addEventListener('click', function(){fileInput.click()});
+fileInput.addEventListener('change', function(e){if(e.target.files.length)handleFile(e.target.files[0])});
+
+async function handleFile(file) {
+  if (!file.type.startsWith('video/') && !/\.(mp4|avi|mkv|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|ts)$/i.test(file.name)) { alert('请选择视频文件'); return; }
+  currentFile = file;
+  fileInfoEl.classList.add('show');
+  document.getElementById('fiName').textContent = file.name;
+  document.getElementById('fiSize').textContent = fmtSize(file.size);
+  document.getElementById('fiMd5').textContent = '计算中...';
+  document.getElementById('fiRes').textContent = '检测中...';
+  document.getElementById('fiDur').textContent = '检测中...';
+  var r = await Promise.all([computeMD5(file), probeVideo(file)]);
+  originalMD5 = r[0];
+  document.getElementById('fiMd5').textContent = r[0];
+  document.getElementById('fiRes').textContent = r[1].width && r[1].height ? (r[1].width+' x '+r[1].height) : '-';
+  document.getElementById('fiDur').textContent = r[1].duration ? (r[1].duration.toFixed(1)+'s') : '-';
+  startBtn.disabled = false;
+}
+
+clearBtn.addEventListener('click', function(){currentFile=null;originalMD5='';fileInfoEl.classList.remove('show');startBtn.disabled=true;resultList.innerHTML='';resultCard.style.display='none';fileInput.value=''});
+
+startBtn.addEventListener('click', async function() {
+  if (!currentFile) return;
+  startBtn.disabled = true;
+  resultCard.style.display = '';
+  var file = currentFile, origMD5 = originalMD5;
+  var overlay = document.getElementById('processingOverlay');
+  var procText = document.getElementById('processingText');
+  overlay.classList.add('show');
+  procText.textContent = '正在读取文件...';
+  try {
+    var ab = await file.arrayBuffer();
+    procText.textContent = '正在修改视频...';
+    await new Promise(function(r){setTimeout(r,50)});
+    var isMP4 = false;
+    if (ab.byteLength >= 8) { var h=new Uint8Array(ab,0,8); var ft=String.fromCharCode(h[4],h[5],h[6],h[7]); if(ft==='ftyp'||ft==='moov'||ft==='mdat')isMP4=true; }
+    var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
+    procText.textContent = '正在计算新 MD5...';
+    await new Promise(function(r){setTimeout(r,50)});
+    var blob = new Blob([modified], {type: file.type || 'video/mp4'});
+    var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
+    overlay.classList.remove('show');
+    var card = document.createElement('div');
+    card.className = 'result-card rc-done';
+    card.innerHTML =
+      '<div class="rc-head"><span class="rc-filename">'+esc(file.name)+'</span><span class="rc-badge badge-done">完成</span></div>'+
+      '<div class="rc-compare">'+
+        '<div class="rc-compare-row"><span class="cc-label">原 MD5</span><span class="cc-val cc-old">'+origMD5+'</span></div>'+
+        '<div class="rc-compare-row"><span class="cc-label" style="visibility:hidden">-</span><span class="cc-arrow">&#8595;</span></div>'+
+        '<div class="rc-compare-row"><span class="cc-label">新 MD5</span><span class="cc-val cc-new">'+newMD5+'</span></div>'+
+      '</div>'+
+      '<div class="rc-info">策略: '+lvlName(selectedLevel)+' | 输出: '+fmtSize(blob.size)+'</div>';
+    var url = URL.createObjectURL(blob);
+    var dl = document.createElement('a');
+    dl.href = url; dl.className = 'btn-dl';
+    dl.download = file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
+    dl.innerHTML = '&#11015; 下载新视频';
+    card.appendChild(dl);
+    resultList.innerHTML = '';
+    resultList.appendChild(card);
+  } catch(e) {
+    overlay.classList.remove('show');
+    var card = document.createElement('div');
+    card.className = 'result-card rc-error';
+    card.innerHTML = '<div class="rc-head"><span class="rc-filename">'+esc(file.name)+'</span><span class="rc-badge badge-error">失败</span></div><div class="rc-info" style="color:var(--red)">'+esc(e.message||'处理失败')+'</div>';
+    resultList.innerHTML = '';
+    resultList.appendChild(card);
+  }
+  startBtn.disabled = !currentFile;
+});
+
+function lvlName(l){return l==='metadata'?'快速改码':l==='inject'?'标准改码':'深度改码'}
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function fmtSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB'}
+</script>
+
+<!-- AIGC: {"Label":"value1","ContentProducer":"001191110000802100433B11010001191110000802100433B11010","ProduceID":"f39dd448-f6be-4673-b1ee-28a41b89de35","ReservedCode1":"72dafc97cd38b92e5f3d5cdfd0dfbbe6","ContentPropagator":"001191110000802100433B11010001191110000802100433B11010","PropagateID":"344f02c7-719b-46e2-92cd-36defe5cf3e3","ReservedCode2":"2734827274df537123a472bf4de01eb5"} -->
+</body>
+</html>
