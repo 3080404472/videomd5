@@ -35,13 +35,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .dz-text em{color:var(--accent);font-style:normal;text-decoration:underline}
 #fileInput{display:none}
 
-.file-info{display:none;margin-top:14px;background:var(--card2);border-radius:10px;padding:14px 16px}
-.file-info.show{display:block}
-.fi-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:12px}
-.fi-label{color:var(--dim);flex-shrink:0;margin-right:12px}
-.fi-val{color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
-.fi-md5{font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:11px;letter-spacing:.3px;word-break:break-all;text-align:left;color:var(--accent2);margin-top:4px;padding:6px 8px;background:rgba(91,95,246,.06);border-radius:6px}
-.fi-md5-label{font-size:11px;color:var(--dim);margin-bottom:2px}
+.file-list{margin-top:14px}
+.fl-item{display:flex;align-items:center;gap:10px;background:var(--card2);border-radius:10px;padding:12px 14px;margin-bottom:8px;position:relative}
+.fl-icon{font-size:20px;flex-shrink:0}
+.fl-info{flex:1;min-width:0}
+.fl-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl-meta{font-size:10px;color:var(--dim);margin-top:2px}
+.fl-md5{font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:10px;color:var(--accent2);word-break:break-all;margin-top:4px;padding:4px 6px;background:rgba(91,95,246,.06);border-radius:4px}
+.fl-remove{width:24px;height:24px;border:none;background:rgba(240,101,101,.1);color:var(--red);border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s}
+.fl-remove:hover{background:rgba(240,101,101,.2)}
+.fl-status{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;flex-shrink:0;white-space:nowrap}
+.st-waiting{background:rgba(107,114,128,.15);color:var(--dim)}
+.st-processing{background:rgba(91,95,246,.1);color:var(--accent2)}
+.st-done{background:rgba(45,212,160,.1);color:var(--green)}
+.st-error{background:rgba(240,101,101,.1);color:var(--red)}
+.fl-count{font-size:11px;color:var(--dim);margin-bottom:8px}
 
 .section-label{font-size:13px;font-weight:600;margin-bottom:8px}
 .level-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
@@ -81,6 +89,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .cc-arrow{color:var(--dim);flex-shrink:0}
 .btn-dl{display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:9px 20px;background:rgba(45,212,160,.08);color:var(--green);border:1px solid rgba(45,212,160,.2);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .2s}
 .btn-dl:hover{background:rgba(45,212,160,.15)}
+.btn-dl-all{display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:10px 24px;background:rgba(45,212,160,.1);color:var(--green);border:1px solid rgba(45,212,160,.25);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-dl-all:hover{background:rgba(45,212,160,.18)}
 
 .progress-bar-wrap{margin-top:10px;display:none}
 .progress-bar-wrap.show{display:block}
@@ -90,7 +100,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 
 .processing-overlay{display:none;position:fixed;inset:0;background:rgba(10,12,16,.7);z-index:50;align-items:center;justify-content:center}
 .processing-overlay.show{display:flex}
-.processing-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 32px;text-align:center;max-width:320px}
+.processing-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 32px;text-align:center;max-width:340px}
 .processing-box .pb-spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .processing-box .pb-text{font-size:13px;color:var(--dim)}
@@ -124,17 +134,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
   <div class="card">
     <div class="drop-zone" id="dropZone">
       <div class="dz-icon">&#128451;</div>
-      <div class="dz-text">拖拽视频到此处<br>或 <em>点击选择文件</em></div>
+      <div class="dz-text">拖拽视频到此处（支持多个）<br>或 <em>点击选择文件</em></div>
     </div>
-    <input type="file" id="fileInput" accept="video/*">
-    <div class="file-info" id="fileInfo">
-      <div class="fi-row"><span class="fi-label">文件名</span><span class="fi-val" id="fiName">-</span></div>
-      <div class="fi-row"><span class="fi-label">大小</span><span class="fi-val" id="fiSize">-</span></div>
-      <div class="fi-row"><span class="fi-label">分辨率</span><span class="fi-val" id="fiRes">-</span></div>
-      <div class="fi-row"><span class="fi-label">时长</span><span class="fi-val" id="fiDur">-</span></div>
-      <div class="fi-md5-label">原始 MD5</div>
-      <div class="fi-md5" id="fiMd5">计算中...</div>
-    </div>
+    <input type="file" id="fileInput" accept="video/*" multiple>
+    <div class="file-list" id="fileList"></div>
   </div>
 
   <div class="card">
@@ -167,6 +170,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
   <div class="card" id="resultCard" style="display:none">
     <div class="section-label">改码结果</div>
     <div id="resultList"></div>
+    <div id="downloadAllWrap" style="display:none">
+      <button class="btn-dl-all" id="downloadAllBtn">&#11015; 下载全部</button>
+    </div>
   </div>
 </div>
 
@@ -228,12 +234,11 @@ function probeVideo(file) {
     var timeout = setTimeout(function() { resolve({width:0,height:0,duration:0,hasAudio:false}); URL.revokeObjectURL(url); }, 5000);
     video.onloadedmetadata = function() {
       clearTimeout(timeout);
-      // 检测是否有音频轨道
       var hasAudio = false;
       if (video.mozHasAudio !== undefined) hasAudio = video.mozHasAudio;
       else if (video.webkitAudioDecodedByteCount !== undefined) hasAudio = video.webkitAudioDecodedByteCount > 0;
       else if (video.audioTracks !== undefined) hasAudio = video.audioTracks.length > 0;
-      else hasAudio = true; // 默认假设有音频
+      else hasAudio = true;
       resolve({width:video.videoWidth||0,height:video.videoHeight||0,duration:video.duration||0,hasAudio:hasAudio});
       URL.revokeObjectURL(url);
     };
@@ -248,13 +253,11 @@ var ffmpegLoadAttempted = false;
 
 async function tryLoadFFmpeg(onProgress) {
   if (ffmpegLoaded && ffmpegInstance) return ffmpegInstance;
-  if (ffmpegLoadAttempted) return null; // 已尝试过，不再重复
+  if (ffmpegLoadAttempted) return null;
   ffmpegLoadAttempted = true;
 
   try {
     if (onProgress) onProgress('正在加载转码引擎...');
-
-    // 带超时的脚本加载
     var ffmpegScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
     var utilScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js';
 
@@ -281,7 +284,6 @@ async function tryLoadFFmpeg(onProgress) {
     var coreUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
     var coreWasmUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
 
-    // 核心加载 60 秒超时
     await Promise.race([
       ff.load({ coreURL: coreUrl, wasmURL: coreWasmUrl }),
       new Promise(function(_, reject) { setTimeout(function() { reject(new Error('核心文件加载超时')); }, 60000); })
@@ -322,8 +324,8 @@ async function transcodeVideo(file, level, onProgress, videoInfo) {
   var ff = await tryLoadFFmpeg(onProgress);
   if (!ff) throw new Error('FFmpeg不可用');
 
-  var inputName = 'input.mp4';
-  var outputName = 'output.mp4';
+  var inputName = 'input' + Date.now() + '.mp4';
+  var outputName = 'output' + Date.now() + '.mp4';
 
   if (onProgress) onProgress('正在读取文件...');
   var fileData = await file.arrayBuffer();
@@ -333,80 +335,24 @@ async function transcodeVideo(file, level, onProgress, videoInfo) {
   var hasAudio = videoInfo && videoInfo.hasAudio;
 
   if (level === 'light') {
-    // 轻度：变速 + 裁2帧 + 重编码
-    // 所有滤镜合并到 -filter_complex 中，不再用 -vf/-af
     if (hasAudio) {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]',
-        '-map', '[v]', '-map', '[a]',
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-        '-c:a', 'aac', '-b:a', '128k',
-        '-pix_fmt', 'yuv420p',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]', '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-pix_fmt', 'yuv420p', '-y', outputName];
     } else {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v]',
-        '-map', '[v]',
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-        '-an',
-        '-pix_fmt', 'yuv420p',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v]', '-map', '[v]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-an', '-pix_fmt', 'yuv420p', '-y', outputName];
     }
   } else if (level === 'standard') {
-    // 标准：变速 + 裁帧 + 微噪 + 码率微调
     var br = estimateBitrate(file, videoInfo);
     var bufSize = (parseInt(br) * 2) + 'k';
     if (hasAudio) {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]',
-        '-map', '[v]', '-map', '[a]',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '22',
-        '-maxrate', br, '-bufsize', bufSize,
-        '-c:a', 'aac', '-b:a', '128k',
-        '-pix_fmt', 'yuv420p',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]', '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '22', '-maxrate', br, '-bufsize', bufSize, '-c:a', 'aac', '-b:a', '128k', '-pix_fmt', 'yuv420p', '-y', outputName];
     } else {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v]',
-        '-map', '[v]',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '22',
-        '-maxrate', br, '-bufsize', bufSize,
-        '-an',
-        '-pix_fmt', 'yuv420p',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v]', '-map', '[v]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '22', '-maxrate', br, '-bufsize', bufSize, '-an', '-pix_fmt', 'yuv420p', '-y', outputName];
     }
   } else if (level === 'deep') {
-    // 深度：全参数重编码
     if (hasAudio) {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v];[0:a]atempo=1.02,atrim=start_sample=0,asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=44100[a]',
-        '-map', '[v]', '-map', '[a]',
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '21',
-        '-profile:v', 'high', '-level', '4.1',
-        '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
-        '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v];[0:a]atempo=1.02,atrim=start_sample=0,asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=44100[a]', '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-profile:v', 'high', '-level', '4.1', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', outputName];
     } else {
-      args = [
-        '-i', inputName,
-        '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v]',
-        '-map', '[v]',
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '21',
-        '-profile:v', 'high', '-level', '4.1',
-        '-an',
-        '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
-        '-y', outputName
-      ];
+      args = ['-i', inputName, '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v]', '-map', '[v]', '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-profile:v', 'high', '-level', '4.1', '-an', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', outputName];
     }
   }
 
@@ -537,12 +483,15 @@ function modifyGeneric(buf, level) {
   return result;
 }
 
-// ========== UI ==========
-var currentFile = null, originalMD5 = '', selectedLevel = 'light';
-var currentVideoInfo = null;
+// ========== 多文件状态管理 ==========
+var fileItems = []; // {id, file, md5, videoInfo, status:'waiting'|'processing'|'done'|'error', result:null|{blob,newMD5,modeLabel}, error:null}
+var selectedLevel = 'light';
+var isProcessing = false;
+var itemIdCounter = 0;
+
 var dropZone = document.getElementById('dropZone');
 var fileInput = document.getElementById('fileInput');
-var fileInfoEl = document.getElementById('fileInfo');
+var fileListEl = document.getElementById('fileList');
 var startBtn = document.getElementById('startBtn');
 var clearBtn = document.getElementById('clearBtn');
 var resultCard = document.getElementById('resultCard');
@@ -574,35 +523,104 @@ document.querySelectorAll('.level-btn').forEach(function(btn) {
 
 dropZone.addEventListener('dragover', function(e){e.preventDefault();dropZone.classList.add('drag-over')});
 dropZone.addEventListener('dragleave', function(){dropZone.classList.remove('drag-over')});
-dropZone.addEventListener('drop', function(e){e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])});
+dropZone.addEventListener('drop', function(e){e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files.length)addFiles(e.dataTransfer.files)});
 dropZone.addEventListener('click', function(){fileInput.click()});
-fileInput.addEventListener('change', function(e){if(e.target.files.length)handleFile(e.target.files[0])});
+fileInput.addEventListener('change', function(e){if(e.target.files.length)addFiles(e.target.files);fileInput.value='';});
 
-async function handleFile(file) {
-  if (!file.type.startsWith('video/') && !/\.(mp4|avi|mkv|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|ts)$/i.test(file.name)) { alert('请选择视频文件'); return; }
-  currentFile = file;
-  fileInfoEl.classList.add('show');
-  document.getElementById('fiName').textContent = file.name;
-  document.getElementById('fiSize').textContent = fmtSize(file.size);
-  document.getElementById('fiMd5').textContent = '计算中...';
-  document.getElementById('fiRes').textContent = '检测中...';
-  document.getElementById('fiDur').textContent = '检测中...';
-  var r = await Promise.all([computeMD5(file), probeVideo(file)]);
-  originalMD5 = r[0];
-  currentVideoInfo = r[1];
-  document.getElementById('fiMd5').textContent = r[0];
-  document.getElementById('fiRes').textContent = r[1].width && r[1].height ? (r[1].width+' x '+r[1].height) : '-';
-  document.getElementById('fiDur').textContent = r[1].duration ? (r[1].duration.toFixed(1)+'s') : '-';
-  startBtn.disabled = false;
+async function addFiles(files) {
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (!file.type.startsWith('video/') && !/\.(mp4|avi|mkv|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|ts)$/i.test(file.name)) continue;
+    var item = {id: ++itemIdCounter, file: file, md5: '计算中...', videoInfo: null, status: 'waiting', result: null, error: null};
+    fileItems.push(item);
+  }
+  renderFileList();
+  updateStartBtn();
+
+  // 计算每个 waiting 项的 MD5 和视频信息
+  for (var i = 0; i < fileItems.length; i++) {
+    var item = fileItems[i];
+    if (item.status !== 'waiting' || item.videoInfo) continue;
+    try {
+      var r = await Promise.all([computeMD5(item.file), probeVideo(item.file)]);
+      item.md5 = r[0];
+      item.videoInfo = r[1];
+      renderFileList();
+    } catch(e) {
+      item.md5 = '计算失败';
+      item.videoInfo = {width:0,height:0,duration:0,hasAudio:false};
+      renderFileList();
+    }
+  }
 }
 
-clearBtn.addEventListener('click', function(){currentFile=null;originalMD5='';currentVideoInfo=null;fileInfoEl.classList.remove('show');startBtn.disabled=true;resultList.innerHTML='';resultCard.style.display='none';fileInput.value='';document.getElementById('progressWrap').classList.remove('show')});
+function removeFile(id) {
+  fileItems = fileItems.filter(function(f){return f.id !== id});
+  renderFileList();
+  updateStartBtn();
+  if (fileItems.length === 0) {
+    resultCard.style.display = 'none';
+    resultList.innerHTML = '';
+  }
+}
+
+function renderFileList() {
+  if (fileItems.length === 0) {
+    fileListEl.innerHTML = '';
+    return;
+  }
+  var html = '<div class="fl-count">已添加 ' + fileItems.length + ' 个文件</div>';
+  for (var i = 0; i < fileItems.length; i++) {
+    var item = fileItems[i];
+    var vi = item.videoInfo;
+    var metaParts = [fmtSize(item.file.size)];
+    if (vi && vi.width) metaParts.push(vi.width + 'x' + vi.height);
+    if (vi && vi.duration) metaParts.push(vi.duration.toFixed(1) + 's');
+    var statusHtml = '';
+    if (item.status === 'waiting') statusHtml = '<span class="fl-status st-waiting">待处理</span>';
+    else if (item.status === 'processing') statusHtml = '<span class="fl-status st-processing">处理中</span>';
+    else if (item.status === 'done') statusHtml = '<span class="fl-status st-done">完成</span>';
+    else if (item.status === 'error') statusHtml = '<span class="fl-status st-error">失败</span>';
+
+    html += '<div class="fl-item" id="fi-' + item.id + '">' +
+      '<div class="fl-icon">&#127916;</div>' +
+      '<div class="fl-info">' +
+        '<div class="fl-name">' + esc(item.file.name) + '</div>' +
+        '<div class="fl-meta">' + metaParts.join(' · ') + '</div>' +
+        '<div class="fl-md5">' + esc(item.md5) + '</div>' +
+      '</div>' +
+      statusHtml +
+      (item.status === 'waiting' ? '<button class="fl-remove" onclick="removeFile('+item.id+')">&#10005;</button>' : '') +
+    '</div>';
+  }
+  fileListEl.innerHTML = html;
+}
+
+function updateStartBtn() {
+  var hasWaiting = fileItems.some(function(f){return f.status === 'waiting'});
+  startBtn.disabled = !hasWaiting || isProcessing;
+  startBtn.textContent = isProcessing ? '处理中...' : '开始改码';
+}
+
+clearBtn.addEventListener('click', function(){
+  fileItems = [];
+  renderFileList();
+  updateStartBtn();
+  resultCard.style.display = 'none';
+  resultList.innerHTML = '';
+  document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('downloadAllWrap').style.display = 'none';
+});
 
 startBtn.addEventListener('click', async function() {
-  if (!currentFile) return;
-  startBtn.disabled = true;
+  var waitingItems = fileItems.filter(function(f){return f.status === 'waiting'});
+  if (waitingItems.length === 0) return;
+
+  isProcessing = true;
+  updateStartBtn();
   resultCard.style.display = '';
-  var file = currentFile, origMD5 = originalMD5, videoInfo = currentVideoInfo;
+  resultList.innerHTML = '';
+
   var overlay = document.getElementById('processingOverlay');
   var procText = document.getElementById('processingText');
   var procSub = document.getElementById('processingSub');
@@ -611,86 +629,119 @@ startBtn.addEventListener('click', async function() {
   var progressText = document.getElementById('progressText');
 
   var isTranscodeMode = ffmpegLoaded && ffmpegInstance;
+  var totalItems = waitingItems.length;
+  var completedItems = 0;
 
-  function updateProgress(msg, sub) {
-    procText.textContent = msg;
-    if (sub) procSub.textContent = sub;
-    progressText.textContent = msg;
-  }
+  for (var idx = 0; idx < waitingItems.length; idx++) {
+    var item = waitingItems[idx];
+    item.status = 'processing';
+    renderFileList();
 
-  overlay.classList.add('show');
-  progressWrap.classList.add('show');
-  progressBar.style.width = '0%';
-  procSub.textContent = isTranscodeMode ? '转码模式：重新编码视频流' : 'MD5改码模式：仅修改文件元数据';
+    overlay.classList.add('show');
+    progressWrap.classList.add('show');
+    progressBar.style.width = '0%';
+    procSub.textContent = (isTranscodeMode ? '转码模式' : 'MD5改码模式') + ' · ' + (idx+1) + '/' + totalItems;
 
-  try {
-    var blob;
-    var modeLabel;
+    try {
+      var blob;
+      var modeLabel;
 
-    if (isTranscodeMode) {
-      updateProgress('正在准备转码...', '转码模式');
-      try {
-        blob = await transcodeVideo(file, selectedLevel, function(msg) {
-          updateProgress(msg, '转码模式');
-          var m = msg.match(/(\d+)%/);
-          if (m) progressBar.style.width = m[1] + '%';
-        }, videoInfo);
-        modeLabel = lvlName(selectedLevel) + '（转码）';
-      } catch(transcodeErr) {
-        console.warn('转码失败，降级为MD5改码:', transcodeErr);
-        updateProgress('转码失败，切换为MD5改码...', '降级模式');
-        isTranscodeMode = false;
-        var ab = await file.arrayBuffer();
+      if (isTranscodeMode) {
+        procText.textContent = '正在转码: ' + item.file.name;
+        try {
+          blob = await transcodeVideo(item.file, selectedLevel, function(msg) {
+            procText.textContent = msg;
+            progressText.textContent = msg;
+            var m = msg.match(/(\d+)%/);
+            if (m) progressBar.style.width = m[1] + '%';
+          }, item.videoInfo);
+          modeLabel = lvlName(selectedLevel) + '（转码）';
+        } catch(transcodeErr) {
+          console.warn('转码失败，降级:', transcodeErr);
+          procText.textContent = '转码失败，切换为MD5改码...';
+          isTranscodeMode = false;
+          var ab = await item.file.arrayBuffer();
+          var isMP4 = detectMP4(ab);
+          var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
+          blob = new Blob([modified], {type: item.file.type || 'video/mp4'});
+          modeLabel = lvlName(selectedLevel) + '（MD5改码·降级）';
+        }
+      } else {
+        procText.textContent = '正在修改: ' + item.file.name;
+        progressText.textContent = '正在修改...';
+        var ab = await item.file.arrayBuffer();
         var isMP4 = detectMP4(ab);
         var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
-        blob = new Blob([modified], {type: file.type || 'video/mp4'});
-        modeLabel = lvlName(selectedLevel) + '（MD5改码·降级）';
+        blob = new Blob([modified], {type: item.file.type || 'video/mp4'});
+        modeLabel = lvlName(selectedLevel) + '（MD5改码）';
       }
-    } else {
-      // MD5 改码模式
-      updateProgress('正在修改视频...', 'MD5改码模式');
-      var ab = await file.arrayBuffer();
-      var isMP4 = detectMP4(ab);
-      var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
-      blob = new Blob([modified], {type: file.type || 'video/mp4'});
-      modeLabel = lvlName(selectedLevel) + '（MD5改码）';
+
+      progressBar.style.width = '90%';
+      procText.textContent = '正在计算新 MD5...';
+      var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
+      progressBar.style.width = '100%';
+
+      item.status = 'done';
+      item.result = {blob: blob, newMD5: newMD5, modeLabel: modeLabel};
+
+      // 渲染结果卡片
+      var card = document.createElement('div');
+      card.className = 'result-card rc-done';
+      card.innerHTML =
+        '<div class="rc-head"><span class="rc-filename">'+esc(item.file.name)+'</span><span class="rc-badge badge-done">完成</span></div>'+
+        '<div class="rc-compare">'+
+          '<div class="rc-compare-row"><span class="cc-label">原 MD5</span><span class="cc-val cc-old">'+item.md5+'</span></div>'+
+          '<div class="rc-compare-row"><span class="cc-label" style="visibility:hidden">-</span><span class="cc-arrow">&#8595;</span></div>'+
+          '<div class="rc-compare-row"><span class="cc-label">新 MD5</span><span class="cc-val cc-new">'+newMD5+'</span></div>'+
+        '</div>'+
+        '<div class="rc-info">策略: '+modeLabel+' | 输出: '+fmtSize(blob.size)+'</div>';
+      var url = URL.createObjectURL(blob);
+      var dl = document.createElement('a');
+      dl.href = url; dl.className = 'btn-dl';
+      dl.download = item.file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
+      dl.innerHTML = '&#11015; 下载';
+      card.appendChild(dl);
+      resultList.appendChild(card);
+
+    } catch(e) {
+      item.status = 'error';
+      item.error = e.message || '处理失败';
+      var card = document.createElement('div');
+      card.className = 'result-card rc-error';
+      card.innerHTML = '<div class="rc-head"><span class="rc-filename">'+esc(item.file.name)+'</span><span class="rc-badge badge-error">失败</span></div><div class="rc-info" style="color:var(--red)">'+esc(item.error)+'</div>';
+      resultList.appendChild(card);
     }
 
-    progressBar.style.width = '90%';
-    updateProgress('正在计算新 MD5...', '');
-    var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
-    progressBar.style.width = '100%';
-
-    overlay.classList.remove('show');
-
-    var card = document.createElement('div');
-    card.className = 'result-card rc-done';
-    card.innerHTML =
-      '<div class="rc-head"><span class="rc-filename">'+esc(file.name)+'</span><span class="rc-badge badge-done">完成</span></div>'+
-      '<div class="rc-compare">'+
-        '<div class="rc-compare-row"><span class="cc-label">原 MD5</span><span class="cc-val cc-old">'+origMD5+'</span></div>'+
-        '<div class="rc-compare-row"><span class="cc-label" style="visibility:hidden">-</span><span class="cc-arrow">&#8595;</span></div>'+
-        '<div class="rc-compare-row"><span class="cc-label">新 MD5</span><span class="cc-val cc-new">'+newMD5+'</span></div>'+
-      '</div>'+
-      '<div class="rc-info">策略: '+modeLabel+' | 输出: '+fmtSize(blob.size)+'</div>';
-    var url = URL.createObjectURL(blob);
-    var dl = document.createElement('a');
-    dl.href = url; dl.className = 'btn-dl';
-    dl.download = file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
-    dl.innerHTML = '&#11015; 下载新视频';
-    card.appendChild(dl);
-    resultList.innerHTML = '';
-    resultList.appendChild(card);
-  } catch(e) {
-    overlay.classList.remove('show');
-    var card = document.createElement('div');
-    card.className = 'result-card rc-error';
-    card.innerHTML = '<div class="rc-head"><span class="rc-filename">'+esc(file.name)+'</span><span class="rc-badge badge-error">失败</span></div><div class="rc-info" style="color:var(--red)">'+esc(e.message||'处理失败')+'</div>';
-    resultList.innerHTML = '';
-    resultList.appendChild(card);
+    completedItems++;
+    renderFileList();
   }
-  startBtn.disabled = !currentFile;
+
+  overlay.classList.remove('show');
   progressWrap.classList.remove('show');
+  isProcessing = false;
+  updateStartBtn();
+
+  // 显示"下载全部"按钮
+  var doneItems = fileItems.filter(function(f){return f.status === 'done' && f.result});
+  if (doneItems.length > 1) {
+    document.getElementById('downloadAllWrap').style.display = '';
+  }
+});
+
+document.getElementById('downloadAllBtn').addEventListener('click', function() {
+  var doneItems = fileItems.filter(function(f){return f.status === 'done' && f.result});
+  for (var i = 0; i < doneItems.length; i++) {
+    var item = doneItems[i];
+    var url = URL.createObjectURL(item.result.blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = item.file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // 延迟释放，避免下载未开始就释放
+    (function(u){setTimeout(function(){URL.revokeObjectURL(u)},10000)})(url);
+  }
 });
 
 function detectMP4(ab) {
