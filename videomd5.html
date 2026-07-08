@@ -19,14 +19,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .header{text-align:center;padding:28px 0 12px}
 .header h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .header p{color:var(--dim);margin-top:3px;font-size:12px;letter-spacing:.3px}
-.header .badge{display:inline-block;margin-top:6px;padding:3px 10px;background:rgba(45,212,160,.1);color:var(--green);border-radius:6px;font-size:11px;font-weight:600}
+.header .badge{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:12px}
 
-.mode-bar{display:flex;gap:6px;margin-bottom:14px}
-.mode-tag{font-size:11px;padding:3px 10px;border-radius:6px;font-weight:600}
 .mode-transcode{background:rgba(45,212,160,.1);color:var(--green)}
 .mode-md5only{background:rgba(251,191,36,.1);color:var(--yellow)}
+.mode-loading{background:rgba(91,95,246,.1);color:var(--accent2)}
 
 .drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:40px 16px;text-align:center;cursor:pointer;transition:all .25s}
 .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(91,95,246,.04)}
@@ -119,7 +118,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
   <div class="header">
     <h1>视频 MD5 改码工具</h1>
     <p>拖拽视频，一键转码改码，解决素材卡审</p>
-    <div class="badge" id="modeBadge">检测中...</div>
+    <div class="badge mode-loading" id="modeBadge">检测转码引擎...</div>
   </div>
 
   <div class="card">
@@ -226,40 +225,41 @@ function probeVideo(file) {
     video.preload = 'metadata';
     var url = URL.createObjectURL(file);
     video.src = url;
-    var timeout = setTimeout(function() { resolve({width:0,height:0,duration:0}); URL.revokeObjectURL(url); }, 5000);
-    video.onloadedmetadata = function() { clearTimeout(timeout); resolve({width:video.videoWidth||0,height:video.videoHeight||0,duration:video.duration||0}); URL.revokeObjectURL(url); };
-    video.onerror = function() { clearTimeout(timeout); resolve({width:0,height:0,duration:0}); URL.revokeObjectURL(url); };
+    var timeout = setTimeout(function() { resolve({width:0,height:0,duration:0,hasAudio:false}); URL.revokeObjectURL(url); }, 5000);
+    video.onloadedmetadata = function() {
+      clearTimeout(timeout);
+      // 检测是否有音频轨道
+      var hasAudio = false;
+      if (video.mozHasAudio !== undefined) hasAudio = video.mozHasAudio;
+      else if (video.webkitAudioDecodedByteCount !== undefined) hasAudio = video.webkitAudioDecodedByteCount > 0;
+      else if (video.audioTracks !== undefined) hasAudio = video.audioTracks.length > 0;
+      else hasAudio = true; // 默认假设有音频
+      resolve({width:video.videoWidth||0,height:video.videoHeight||0,duration:video.duration||0,hasAudio:hasAudio});
+      URL.revokeObjectURL(url);
+    };
+    video.onerror = function() { clearTimeout(timeout); resolve({width:0,height:0,duration:0,hasAudio:false}); URL.revokeObjectURL(url); };
   });
 }
 
 // ========== FFmpeg.wasm 加载 ==========
 var ffmpegLoaded = false;
 var ffmpegInstance = null;
-var ffmpegLoading = false;
+var ffmpegLoadAttempted = false;
 
-async function loadFFmpeg(onProgress) {
+async function tryLoadFFmpeg(onProgress) {
   if (ffmpegLoaded && ffmpegInstance) return ffmpegInstance;
-  if (ffmpegLoading) {
-    // 等待另一个加载完成
-    return new Promise(function(resolve, reject) {
-      var check = setInterval(function() {
-        if (ffmpegLoaded && ffmpegInstance) { clearInterval(check); resolve(ffmpegInstance); }
-      }, 200);
-      setTimeout(function() { clearInterval(check); reject(new Error('加载超时')); }, 60000);
-    });
-  }
-  ffmpegLoading = true;
+  if (ffmpegLoadAttempted) return null; // 已尝试过，不再重复
+  ffmpegLoadAttempted = true;
 
   try {
     if (onProgress) onProgress('正在加载转码引擎...');
-    
-    // 动态加载 FFmpeg.wasm UMD
-    var coreUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
-    var coreWasmUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
-    
-    // 加载 FFmpeg 主库
-    await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
-    await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js');
+
+    // 带超时的脚本加载
+    var ffmpegScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
+    var utilScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js';
+
+    await loadScriptWithTimeout(ffmpegScriptUrl, 15000);
+    await loadScriptWithTimeout(utilScriptUrl, 10000);
 
     if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
       throw new Error('FFmpeg 库加载失败');
@@ -267,8 +267,8 @@ async function loadFFmpeg(onProgress) {
 
     var FFmpegClass = window.FFmpeg.FFmpeg;
     var ff = new FFmpegClass();
-    
-    ff.on('log', function() {}); // 静默日志
+
+    ff.on('log', function() {});
     ff.on('progress', function(e) {
       if (onProgress && e.progress) {
         var pct = Math.min(Math.round(e.progress * 100), 99);
@@ -277,25 +277,36 @@ async function loadFFmpeg(onProgress) {
     });
 
     if (onProgress) onProgress('正在加载核心文件（约25MB）...');
-    
-    await ff.load({
-      coreURL: coreUrl,
-      wasmURL: coreWasmUrl,
-    });
+
+    var coreUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
+    var coreWasmUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
+
+    // 核心加载 60 秒超时
+    await Promise.race([
+      ff.load({ coreURL: coreUrl, wasmURL: coreWasmUrl }),
+      new Promise(function(_, reject) { setTimeout(function() { reject(new Error('核心文件加载超时')); }, 60000); })
+    ]);
 
     ffmpegInstance = ff;
     ffmpegLoaded = true;
-    ffmpegLoading = false;
     return ff;
   } catch(e) {
-    ffmpegLoading = false;
-    throw e;
+    console.warn('FFmpeg.wasm 加载失败:', e.message);
+    ffmpegLoaded = false;
+    ffmpegInstance = null;
+    return null;
   }
+}
+
+function loadScriptWithTimeout(url, timeoutMs) {
+  return Promise.race([
+    loadScript(url),
+    new Promise(function(_, reject) { setTimeout(function() { reject(new Error('脚本加载超时: ' + url)); }, timeoutMs); })
+  ]);
 }
 
 function loadScript(url) {
   return new Promise(function(resolve, reject) {
-    // 检查是否已加载
     var existing = document.querySelector('script[src="' + url + '"]');
     if (existing) { resolve(); return; }
     var s = document.createElement('script');
@@ -307,70 +318,96 @@ function loadScript(url) {
 }
 
 // ========== 转码策略 ==========
-async function transcodeVideo(file, level, onProgress) {
-  var ff = await loadFFmpeg(onProgress);
-  
-  var inputName = 'input' + getFileExt(file.name);
+async function transcodeVideo(file, level, onProgress, videoInfo) {
+  var ff = await tryLoadFFmpeg(onProgress);
+  if (!ff) throw new Error('FFmpeg不可用');
+
+  var inputName = 'input.mp4';
   var outputName = 'output.mp4';
 
   if (onProgress) onProgress('正在读取文件...');
   var fileData = await file.arrayBuffer();
   await ff.writeFile(inputName, new Uint8Array(fileData));
 
-  // 根据级别构建 FFmpeg 命令参数
   var args = [];
-  
+  var hasAudio = videoInfo && videoInfo.hasAudio;
+
   if (level === 'light') {
-    // 轻度：变速1.01x + 裁掉首2帧 + 重新编码
-    // 1.01x变速人眼无法察觉，但编码流完全不同
-    args = [
-      '-i', inputName,
-      '-filter_complex', '[0:v]setpts=0.99*PTS[v];[0:a]atempo=1.01[a]',
-      '-map', '[v]', '-map', '[a]',
-      '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-vf', 'trim=start_frame=2',
-      '-af', 'atrim=start_sample=0',
-      '-y', outputName
-    ];
+    // 轻度：变速 + 裁2帧 + 重编码
+    // 所有滤镜合并到 -filter_complex 中，不再用 -vf/-af
+    if (hasAudio) {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]',
+        '-map', '[v]', '-map', '[a]',
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-pix_fmt', 'yuv420p',
+        '-y', outputName
+      ];
+    } else {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS[v]',
+        '-map', '[v]',
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-an',
+        '-pix_fmt', 'yuv420p',
+        '-y', outputName
+      ];
+    }
   } else if (level === 'standard') {
-    // 标准：变速 + 裁帧 + 微量噪点 + 码率微调
-    var br = estimateBitrate(file);
-    args = [
-      '-i', inputName,
-      '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,noise=alls=1:allf=t[v];[0:a]atempo=1.01,atrim=start_sample=0[a]',
-      '-map', '[v]', '-map', '[a]',
-      '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '22',
-      '-maxrate', br,
-      '-bufsize', (parseInt(br) * 2) + 'k',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-pix_fmt', 'yuv420p',
-      '-y', outputName
-    ];
+    // 标准：变速 + 裁帧 + 微噪 + 码率微调
+    var br = estimateBitrate(file, videoInfo);
+    var bufSize = (parseInt(br) * 2) + 'k';
+    if (hasAudio) {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v];[0:a]atempo=1.01,atrim=start_sample=0,asetpts=PTS-STARTPTS[a]',
+        '-map', '[v]', '-map', '[a]',
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '22',
+        '-maxrate', br, '-bufsize', bufSize,
+        '-c:a', 'aac', '-b:a', '128k',
+        '-pix_fmt', 'yuv420p',
+        '-y', outputName
+      ];
+    } else {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.99*PTS,trim=start_frame=2,setpts=PTS-STARTPTS,noise=alls=1:allf=t[v]',
+        '-map', '[v]',
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '22',
+        '-maxrate', br, '-bufsize', bufSize,
+        '-an',
+        '-pix_fmt', 'yuv420p',
+        '-y', outputName
+      ];
+    }
   } else if (level === 'deep') {
-    // 深度：全参数重编码 + 变速 + 噪点 + 分辨率微调 + 帧率变化
-    args = [
-      '-i', inputName,
-      '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,noise=alls=2:allf=t,scale=iw*0.99:ih*0.99,fps=29.97[v];[0:a]atempo=1.02,atrim=start_sample=0,aformat=sample_fmts=fltp:sample_rates=44100[a]',
-      '-map', '[v]', '-map', '[a]',
-      '-c:v', 'libx264',
-      '-preset', 'slow',
-      '-crf', '21',
-      '-profile:v', 'high',
-      '-level', '4.1',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-ar', '44100',
-      '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
-      '-y', outputName
-    ];
+    // 深度：全参数重编码
+    if (hasAudio) {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v];[0:a]atempo=1.02,atrim=start_sample=0,asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=44100[a]',
+        '-map', '[v]', '-map', '[a]',
+        '-c:v', 'libx264', '-preset', 'slow', '-crf', '21',
+        '-profile:v', 'high', '-level', '4.1',
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+        '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+        '-y', outputName
+      ];
+    } else {
+      args = [
+        '-i', inputName,
+        '-filter_complex', '[0:v]setpts=0.98*PTS,trim=start_frame=3,setpts=PTS-STARTPTS,noise=alls=2:allf=t,fps=29.97[v]',
+        '-map', '[v]',
+        '-c:v', 'libx264', '-preset', 'slow', '-crf', '21',
+        '-profile:v', 'high', '-level', '4.1',
+        '-an',
+        '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+        '-y', outputName
+      ];
+    }
   }
 
   if (onProgress) onProgress('正在转码...');
@@ -378,27 +415,18 @@ async function transcodeVideo(file, level, onProgress) {
 
   if (onProgress) onProgress('正在生成文件...');
   var outputData = await ff.readFile(outputName);
-  
-  // 清理临时文件
+
   try { await ff.deleteFile(inputName); } catch(e) {}
   try { await ff.deleteFile(outputName); } catch(e) {}
 
   return new Blob([outputData.buffer], {type: 'video/mp4'});
 }
 
-function getFileExt(name) {
-  var ext = (name.match(/\.([^.]+)$/) || [,'mp4'])[1].toLowerCase();
-  if (['mp4','avi','mkv','mov','wmv','flv','webm','m4v','mpg','mpeg','3gp','ts'].indexOf(ext) >= 0) return '.' + ext;
-  return '.mp4';
-}
-
-function estimateBitrate(file) {
-  // 粗略估算码率，用于设置 maxrate
-  var dur = 30; // 默认30秒
-  if (currentVideoInfo && currentVideoInfo.duration > 0) dur = currentVideoInfo.duration;
+function estimateBitrate(file, videoInfo) {
+  var dur = 30;
+  if (videoInfo && videoInfo.duration > 0) dur = videoInfo.duration;
   var bps = (file.size * 8) / dur;
   var kbps = Math.round(bps / 1024);
-  // 稍微降低一点码率
   return Math.max(500, Math.round(kbps * 0.95)) + 'k';
 }
 
@@ -521,25 +549,20 @@ var resultCard = document.getElementById('resultCard');
 var resultList = document.getElementById('resultList');
 var modeBadge = document.getElementById('modeBadge');
 
-// 检测 FFmpeg.wasm 可用性并更新模式标识
-async function checkFFmpegAvailability() {
-  try {
-    await loadFFmpeg(function(msg){ modeBadge.textContent = msg; });
-    modeBadge.textContent = '转码模式 · FFmpeg引擎已就绪';
-    modeBadge.className = 'badge mode-transcode';
-    return true;
-  } catch(e) {
-    console.warn('FFmpeg.wasm 不可用，降级为纯MD5改码:', e.message);
-    modeBadge.textContent = 'MD5改码模式 · 转码引擎不可用';
-    modeBadge.className = 'badge mode-md5only';
-    ffmpegLoaded = false;
-    ffmpegInstance = null;
-    return false;
-  }
-}
-
-// 预加载 FFmpeg（不阻塞 UI）
-setTimeout(function() { checkFFmpegAvailability(); }, 1000);
+// 后台预加载 FFmpeg
+setTimeout(function() {
+  tryLoadFFmpeg(function(msg) {
+    modeBadge.textContent = msg;
+  }).then(function(ff) {
+    if (ff) {
+      modeBadge.textContent = '转码模式 · FFmpeg引擎已就绪';
+      modeBadge.className = 'badge mode-transcode';
+    } else {
+      modeBadge.textContent = 'MD5改码模式 · 转码引擎不可用';
+      modeBadge.className = 'badge mode-md5only';
+    }
+  });
+}, 500);
 
 document.querySelectorAll('.level-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -579,14 +602,14 @@ startBtn.addEventListener('click', async function() {
   if (!currentFile) return;
   startBtn.disabled = true;
   resultCard.style.display = '';
-  var file = currentFile, origMD5 = originalMD5;
+  var file = currentFile, origMD5 = originalMD5, videoInfo = currentVideoInfo;
   var overlay = document.getElementById('processingOverlay');
   var procText = document.getElementById('processingText');
   var procSub = document.getElementById('processingSub');
   var progressWrap = document.getElementById('progressWrap');
   var progressBar = document.getElementById('progressBar');
   var progressText = document.getElementById('progressText');
-  
+
   var isTranscodeMode = ffmpegLoaded && ffmpegInstance;
 
   function updateProgress(msg, sub) {
@@ -605,24 +628,20 @@ startBtn.addEventListener('click', async function() {
     var modeLabel;
 
     if (isTranscodeMode) {
-      // 转码模式
       updateProgress('正在准备转码...', '转码模式');
       try {
         blob = await transcodeVideo(file, selectedLevel, function(msg) {
           updateProgress(msg, '转码模式');
-          // 尝试提取百分比
           var m = msg.match(/(\d+)%/);
           if (m) progressBar.style.width = m[1] + '%';
-        });
+        }, videoInfo);
         modeLabel = lvlName(selectedLevel) + '（转码）';
       } catch(transcodeErr) {
-        // 转码失败，降级到MD5改码
         console.warn('转码失败，降级为MD5改码:', transcodeErr);
         updateProgress('转码失败，切换为MD5改码...', '降级模式');
         isTranscodeMode = false;
         var ab = await file.arrayBuffer();
-        var isMP4 = false;
-        if (ab.byteLength >= 8) { var h=new Uint8Array(ab,0,8); var ft=String.fromCharCode(h[4],h[5],h[6],h[7]); if(ft==='ftyp'||ft==='moov'||ft==='mdat')isMP4=true; }
+        var isMP4 = detectMP4(ab);
         var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
         blob = new Blob([modified], {type: file.type || 'video/mp4'});
         modeLabel = lvlName(selectedLevel) + '（MD5改码·降级）';
@@ -631,8 +650,7 @@ startBtn.addEventListener('click', async function() {
       // MD5 改码模式
       updateProgress('正在修改视频...', 'MD5改码模式');
       var ab = await file.arrayBuffer();
-      var isMP4 = false;
-      if (ab.byteLength >= 8) { var h=new Uint8Array(ab,0,8); var ft=String.fromCharCode(h[4],h[5],h[6],h[7]); if(ft==='ftyp'||ft==='moov'||ft==='mdat')isMP4=true; }
+      var isMP4 = detectMP4(ab);
       var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
       blob = new Blob([modified], {type: file.type || 'video/mp4'});
       modeLabel = lvlName(selectedLevel) + '（MD5改码）';
@@ -642,7 +660,7 @@ startBtn.addEventListener('click', async function() {
     updateProgress('正在计算新 MD5...', '');
     var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
     progressBar.style.width = '100%';
-    
+
     overlay.classList.remove('show');
 
     var card = document.createElement('div');
@@ -674,6 +692,13 @@ startBtn.addEventListener('click', async function() {
   startBtn.disabled = !currentFile;
   progressWrap.classList.remove('show');
 });
+
+function detectMP4(ab) {
+  if (ab.byteLength < 8) return false;
+  var h = new Uint8Array(ab, 0, 8);
+  var ft = String.fromCharCode(h[4],h[5],h[6],h[7]);
+  return ft === 'ftyp' || ft === 'moov' || ft === 'mdat';
+}
 
 function lvlName(l){return l==='light'?'轻度转码':l==='standard'?'标准转码':'深度转码'}
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
