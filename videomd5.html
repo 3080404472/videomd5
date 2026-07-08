@@ -195,6 +195,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 </div>
 
 <script>
+// ========== Service Worker 注册（注入 COOP/COEP 头，使 SharedArrayBuffer 可用） ==========
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(function(reg) {
+    console.log('SW 注册成功, scope:', reg.scope);
+    // 如果 SharedArrayBuffer 仍不可用，刷新页面让 SW 接管
+    if (typeof SharedArrayBuffer === 'undefined' && !sessionStorage.getItem('sw_refreshed')) {
+      sessionStorage.setItem('sw_refreshed', '1');
+      location.reload();
+    }
+  }).catch(function(err) {
+    console.warn('SW 注册失败:', err);
+  });
+}
+
 // ========== 内联 MD5 实现 ==========
 (function(){
 var hex_chr='0123456789abcdef'.split('');
@@ -269,53 +283,74 @@ var ffmpegLoaded = false;
 var ffmpegInstance = null;
 var ffmpegLoadAttempted = false;
 
+// 多 CDN 镜像源，按优先级排列
+var CDN_MIRRORS = [
+  { name: 'jsdelivr',   ffmpeg: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js', util: 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js', core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm' },
+  { name: 'npmmirror',  ffmpeg: 'https://registry.npmmirror.com/@ffmpeg/ffmpeg/0.12.10/files/dist/umd/ffmpeg.js', util: 'https://registry.npmmirror.com/@ffmpeg/util/0.12.1/files/dist/umd/util.js', core: 'https://registry.npmmirror.com/@ffmpeg/core/0.12.6/files/dist/umd/ffmpeg-core.js', wasm: 'https://registry.npmmirror.com/@ffmpeg/core@0.12.6/files/dist/umd/ffmpeg-core.wasm' },
+  { name: 'unpkg',      ffmpeg: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js', util: 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js', core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm' }
+];
+
 async function tryLoadFFmpeg(onProgress) {
   if (ffmpegLoaded && ffmpegInstance) return ffmpegInstance;
   if (ffmpegLoadAttempted) return null;
   ffmpegLoadAttempted = true;
 
-  try {
-    if (onProgress) onProgress('正在加载转码引擎...');
-    var ffmpegScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
-    var utilScriptUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js';
-
-    await loadScriptWithTimeout(ffmpegScriptUrl, 15000);
-    await loadScriptWithTimeout(utilScriptUrl, 10000);
-
-    if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
-      throw new Error('FFmpeg 库加载失败');
-    }
-
-    var FFmpegClass = window.FFmpeg.FFmpeg;
-    var ff = new FFmpegClass();
-
-    ff.on('log', function() {});
-    ff.on('progress', function(e) {
-      if (onProgress && e.progress) {
-        var pct = Math.min(Math.round(e.progress * 100), 99);
-        onProgress('正在转码... ' + pct + '%');
-      }
-    });
-
-    if (onProgress) onProgress('正在加载核心文件（约25MB）...');
-
-    var coreUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
-    var coreWasmUrl = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
-
-    await Promise.race([
-      ff.load({ coreURL: coreUrl, wasmURL: coreWasmUrl }),
-      new Promise(function(_, reject) { setTimeout(function() { reject(new Error('核心文件加载超时')); }, 60000); })
-    ]);
-
-    ffmpegInstance = ff;
-    ffmpegLoaded = true;
-    return ff;
-  } catch(e) {
-    console.warn('FFmpeg.wasm 加载失败:', e.message);
+  // 检测 SharedArrayBuffer 支持
+  if (typeof SharedArrayBuffer === 'undefined') {
+    console.warn('SharedArrayBuffer 不可用，FFmpeg.wasm 无法运行');
+    if (onProgress) onProgress('浏览器不支持 SharedArrayBuffer，转码引擎不可用');
     ffmpegLoaded = false;
     ffmpegInstance = null;
     return null;
   }
+
+  for (var ci = 0; ci < CDN_MIRRORS.length; ci++) {
+    var cdn = CDN_MIRRORS[ci];
+    try {
+      if (onProgress) onProgress('正在加载转码引擎（' + cdn.name + '）...');
+
+      await loadScriptWithTimeout(cdn.ffmpeg, 15000);
+      await loadScriptWithTimeout(cdn.util, 10000);
+
+      if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
+        throw new Error('FFmpeg 库加载失败（' + cdn.name + '）');
+      }
+
+      var FFmpegClass = window.FFmpeg.FFmpeg;
+      var ff = new FFmpegClass();
+
+      ff.on('log', function() {});
+      ff.on('progress', function(e) {
+        if (onProgress && e.progress) {
+          var pct = Math.min(Math.round(e.progress * 100), 99);
+          onProgress('正在转码... ' + pct + '%');
+        }
+      });
+
+      if (onProgress) onProgress('正在加载核心文件（' + cdn.name + '，约25MB）...');
+
+      await Promise.race([
+        ff.load({ coreURL: cdn.core, wasmURL: cdn.wasm }),
+        new Promise(function(_, reject) { setTimeout(function() { reject(new Error('核心文件加载超时（' + cdn.name + '）')); }, 90000); })
+      ]);
+
+      ffmpegInstance = ff;
+      ffmpegLoaded = true;
+      console.log('FFmpeg.wasm 加载成功，CDN:', cdn.name);
+      return ff;
+    } catch(e) {
+      console.warn('CDN ' + cdn.name + ' 加载失败:', e.message);
+      // 清理残留，尝试下一个 CDN
+      ffmpegLoaded = false;
+      ffmpegInstance = null;
+    }
+  }
+
+  // 所有 CDN 都失败
+  console.warn('所有 CDN 均加载失败');
+  ffmpegLoaded = false;
+  ffmpegInstance = null;
+  return null;
 }
 
 function loadScriptWithTimeout(url, timeoutMs) {
@@ -526,8 +561,31 @@ setTimeout(function() {
       modeBadge.textContent = '转码模式 · FFmpeg引擎已就绪';
       modeBadge.className = 'badge mode-transcode';
     } else {
-      modeBadge.textContent = 'MD5改码模式 · 转码引擎不可用';
+      var sabOk = typeof SharedArrayBuffer !== 'undefined';
+      modeBadge.innerHTML = 'MD5改码模式 · 转码引擎不可用' + (sabOk ? ' <span id="retryEngine" style="cursor:pointer;text-decoration:underline;margin-left:4px">重试</span>' : ' <span style="opacity:.6">(需刷新启用引擎)</span>');
       modeBadge.className = 'badge mode-md5only';
+      if (sabOk) {
+        document.getElementById('retryEngine').addEventListener('click', function() {
+          ffmpegLoadAttempted = false;
+          ffmpegLoaded = false;
+          ffmpegInstance = null;
+          modeBadge.textContent = '正在重新加载引擎...';
+          modeBadge.className = 'badge mode-loading';
+          tryLoadFFmpeg(function(msg) {
+            modeBadge.textContent = msg;
+          }).then(function(ff2) {
+            if (ff2) {
+              modeBadge.textContent = '转码模式 · FFmpeg引擎已就绪';
+              modeBadge.className = 'badge mode-transcode';
+            } else {
+              modeBadge.innerHTML = 'MD5改码模式 · 转码引擎不可用 <span id="retryEngine" style="cursor:pointer;text-decoration:underline;margin-left:4px">重试</span>';
+              modeBadge.className = 'badge mode-md5only';
+              // 重新绑定重试
+              document.getElementById('retryEngine').addEventListener('click', arguments.callee);
+            }
+          });
+        });
+      }
     }
   });
 }, 500);
