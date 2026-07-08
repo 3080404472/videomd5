@@ -62,6 +62,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
 .level-btn .lv-tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:4px;background:rgba(91,95,246,.12);color:var(--accent2)}
 .level-btn.lv-recommend .lv-tag{background:rgba(45,212,160,.12);color:var(--green)}
 
+.copy-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.copy-label{font-size:12px;color:var(--dim);flex-shrink:0}
+.copy-ctrl{display:flex;align-items:center;gap:8px}
+.copy-btn{width:28px;height:28px;border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent2)}
+.copy-val{font-size:18px;font-weight:700;color:var(--accent2);min-width:24px;text-align:center}
+.copy-hint{font-size:10px;color:var(--dim2);margin-top:2px}
+
 .btn-row{display:flex;gap:10px;margin-top:16px}
 .btn{flex:1;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;outline:none}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
@@ -157,6 +165,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Micr
         <div class="lv-desc">全参数重编码，最彻底</div>
       </div>
     </div>
+    <div class="copy-row" style="margin-top:14px">
+      <span class="copy-label">每个视频生成</span>
+      <div class="copy-ctrl">
+        <button class="copy-btn" id="copyMinus">-</button>
+        <span class="copy-val" id="copyCount">1</span>
+        <button class="copy-btn" id="copyPlus">+</button>
+      </div>
+      <span class="copy-label">份不同版本</span>
+    </div>
+    <div class="copy-hint" id="copyHint">每份版本 MD5 均不同，可批量过审</div>
     <div class="btn-row">
       <button class="btn btn-primary" id="startBtn" disabled>开始改码</button>
       <button class="btn btn-ghost" id="clearBtn">清空</button>
@@ -484,8 +502,9 @@ function modifyGeneric(buf, level) {
 }
 
 // ========== 多文件状态管理 ==========
-var fileItems = []; // {id, file, md5, videoInfo, status:'waiting'|'processing'|'done'|'error', result:null|{blob,newMD5,modeLabel}, error:null}
+var fileItems = []; // {id, file, md5, videoInfo, status:'waiting'|'processing'|'done'|'error', results:[{blob,newMD5,modeLabel}], error:null}
 var selectedLevel = 'light';
+var copyCount = 1;
 var isProcessing = false;
 var itemIdCounter = 0;
 
@@ -521,6 +540,24 @@ document.querySelectorAll('.level-btn').forEach(function(btn) {
   });
 });
 
+// 转码数量 +/- 按钮
+var copyCountEl = document.getElementById('copyCount');
+var copyHintEl = document.getElementById('copyHint');
+document.getElementById('copyMinus').addEventListener('click', function() {
+  if (copyCount > 1) {
+    copyCount--;
+    copyCountEl.textContent = copyCount;
+    copyHintEl.textContent = copyCount > 1 ? '将生成 ' + copyCount + ' 份不同版本，每份 MD5 均不同' : '每份版本 MD5 均不同，可批量过审';
+  }
+});
+document.getElementById('copyPlus').addEventListener('click', function() {
+  if (copyCount < 9) {
+    copyCount++;
+    copyCountEl.textContent = copyCount;
+    copyHintEl.textContent = copyCount > 1 ? '将生成 ' + copyCount + ' 份不同版本，每份 MD5 均不同' : '每份版本 MD5 均不同，可批量过审';
+  }
+});
+
 dropZone.addEventListener('dragover', function(e){e.preventDefault();dropZone.classList.add('drag-over')});
 dropZone.addEventListener('dragleave', function(){dropZone.classList.remove('drag-over')});
 dropZone.addEventListener('drop', function(e){e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files.length)addFiles(e.dataTransfer.files)});
@@ -531,7 +568,7 @@ async function addFiles(files) {
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
     if (!file.type.startsWith('video/') && !/\.(mp4|avi|mkv|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|ts)$/i.test(file.name)) continue;
-    var item = {id: ++itemIdCounter, file: file, md5: '计算中...', videoInfo: null, status: 'waiting', result: null, error: null};
+    var item = {id: ++itemIdCounter, file: file, md5: '计算中...', videoInfo: null, status: 'waiting', results: [], error: null};
     fileItems.push(item);
   }
   renderFileList();
@@ -629,90 +666,107 @@ startBtn.addEventListener('click', async function() {
   var progressText = document.getElementById('progressText');
 
   var isTranscodeMode = ffmpegLoaded && ffmpegInstance;
-  var totalItems = waitingItems.length;
-  var completedItems = 0;
+  var totalCopies = waitingItems.length * copyCount;
+  var completedCopies = 0;
 
   for (var idx = 0; idx < waitingItems.length; idx++) {
     var item = waitingItems[idx];
     item.status = 'processing';
+    item.results = [];
     renderFileList();
 
     overlay.classList.add('show');
     progressWrap.classList.add('show');
     progressBar.style.width = '0%';
-    procSub.textContent = (isTranscodeMode ? '转码模式' : 'MD5改码模式') + ' · ' + (idx+1) + '/' + totalItems;
 
-    try {
-      var blob;
-      var modeLabel;
+    for (var ci = 0; ci < copyCount; ci++) {
+      var copyNum = ci + 1;
+      procSub.textContent = (isTranscodeMode ? '转码模式' : 'MD5改码模式') + ' · ' + item.file.name + ' · ' + copyNum + '/' + copyCount;
 
-      if (isTranscodeMode) {
-        procText.textContent = '正在转码: ' + item.file.name;
-        try {
-          blob = await transcodeVideo(item.file, selectedLevel, function(msg) {
-            procText.textContent = msg;
-            progressText.textContent = msg;
-            var m = msg.match(/(\d+)%/);
-            if (m) progressBar.style.width = m[1] + '%';
-          }, item.videoInfo);
-          modeLabel = lvlName(selectedLevel) + '（转码）';
-        } catch(transcodeErr) {
-          console.warn('转码失败，降级:', transcodeErr);
-          procText.textContent = '转码失败，切换为MD5改码...';
-          isTranscodeMode = false;
+      try {
+        var blob;
+        var modeLabel;
+
+        if (isTranscodeMode) {
+          procText.textContent = '正在转码: ' + item.file.name + (copyCount > 1 ? '（第' + copyNum + '份）' : '');
+          try {
+            blob = await transcodeVideo(item.file, selectedLevel, function(msg) {
+              procText.textContent = msg;
+              progressText.textContent = msg;
+              var m = msg.match(/(\d+)%/);
+              if (m) progressBar.style.width = Math.round(parseInt(m[1]) * 0.9) + '%';
+            }, item.videoInfo);
+            modeLabel = lvlName(selectedLevel) + '（转码）';
+          } catch(transcodeErr) {
+            console.warn('转码失败，降级:', transcodeErr);
+            procText.textContent = '转码失败，切换为MD5改码...';
+            isTranscodeMode = false;
+            var ab = await item.file.arrayBuffer();
+            var isMP4 = detectMP4(ab);
+            var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
+            blob = new Blob([modified], {type: item.file.type || 'video/mp4'});
+            modeLabel = lvlName(selectedLevel) + '（MD5改码·降级）';
+          }
+        } else {
+          procText.textContent = '正在修改: ' + item.file.name + (copyCount > 1 ? '（第' + copyNum + '份）' : '');
+          progressText.textContent = '正在修改...';
           var ab = await item.file.arrayBuffer();
           var isMP4 = detectMP4(ab);
           var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
           blob = new Blob([modified], {type: item.file.type || 'video/mp4'});
-          modeLabel = lvlName(selectedLevel) + '（MD5改码·降级）';
+          modeLabel = lvlName(selectedLevel) + '（MD5改码）';
         }
-      } else {
-        procText.textContent = '正在修改: ' + item.file.name;
-        progressText.textContent = '正在修改...';
-        var ab = await item.file.arrayBuffer();
-        var isMP4 = detectMP4(ab);
-        var modified = isMP4 ? modifyMP4(ab, selectedLevel) : modifyGeneric(ab, selectedLevel);
-        blob = new Blob([modified], {type: item.file.type || 'video/mp4'});
-        modeLabel = lvlName(selectedLevel) + '（MD5改码）';
+
+        progressBar.style.width = '90%';
+        procText.textContent = '正在计算新 MD5...';
+        var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
+        progressBar.style.width = '100%';
+
+        item.results.push({blob: blob, newMD5: newMD5, modeLabel: modeLabel});
+
+        // 渲染这份结果卡片
+        var card = document.createElement('div');
+        card.className = 'result-card rc-done';
+        var fileNameLabel = copyCount > 1
+          ? esc(item.file.name) + ' · 第' + copyNum + '份'
+          : esc(item.file.name);
+        card.innerHTML =
+          '<div class="rc-head"><span class="rc-filename">' + fileNameLabel + '</span><span class="rc-badge badge-done">完成</span></div>'+
+          '<div class="rc-compare">'+
+            '<div class="rc-compare-row"><span class="cc-label">原 MD5</span><span class="cc-val cc-old">'+item.md5+'</span></div>'+
+            '<div class="rc-compare-row"><span class="cc-label" style="visibility:hidden">-</span><span class="cc-arrow">&#8595;</span></div>'+
+            '<div class="rc-compare-row"><span class="cc-label">新 MD5</span><span class="cc-val cc-new">'+newMD5+'</span></div>'+
+          '</div>'+
+          '<div class="rc-info">策略: '+modeLabel+' | 输出: '+fmtSize(blob.size)+'</div>';
+        var url = URL.createObjectURL(blob);
+        var dl = document.createElement('a');
+        dl.href = url; dl.className = 'btn-dl';
+        var ext = item.file.name.match(/(\.[^.]+)$/);
+        var baseName = item.file.name.replace(/(\.[^.]+)$/, '');
+        dl.download = copyCount > 1 ? baseName + '_v' + copyNum + (ext ? ext[1] : '.mp4') : baseName + '_newmd5' + (ext ? ext[1] : '.mp4');
+        dl.innerHTML = '&#11015; 下载';
+        card.appendChild(dl);
+        resultList.appendChild(card);
+
+      } catch(e) {
+        item.results.push(null);
+        var card = document.createElement('div');
+        card.className = 'result-card rc-error';
+        var fileNameLabel = copyCount > 1
+          ? esc(item.file.name) + ' · 第' + copyNum + '份'
+          : esc(item.file.name);
+        card.innerHTML = '<div class="rc-head"><span class="rc-filename">'+fileNameLabel+'</span><span class="rc-badge badge-error">失败</span></div><div class="rc-info" style="color:var(--red)">'+esc(e.message || '处理失败')+'</div>';
+        resultList.appendChild(card);
       }
 
-      progressBar.style.width = '90%';
-      procText.textContent = '正在计算新 MD5...';
-      var newMD5 = await computeMD5(new File([blob], 'o.mp4'));
-      progressBar.style.width = '100%';
-
-      item.status = 'done';
-      item.result = {blob: blob, newMD5: newMD5, modeLabel: modeLabel};
-
-      // 渲染结果卡片
-      var card = document.createElement('div');
-      card.className = 'result-card rc-done';
-      card.innerHTML =
-        '<div class="rc-head"><span class="rc-filename">'+esc(item.file.name)+'</span><span class="rc-badge badge-done">完成</span></div>'+
-        '<div class="rc-compare">'+
-          '<div class="rc-compare-row"><span class="cc-label">原 MD5</span><span class="cc-val cc-old">'+item.md5+'</span></div>'+
-          '<div class="rc-compare-row"><span class="cc-label" style="visibility:hidden">-</span><span class="cc-arrow">&#8595;</span></div>'+
-          '<div class="rc-compare-row"><span class="cc-label">新 MD5</span><span class="cc-val cc-new">'+newMD5+'</span></div>'+
-        '</div>'+
-        '<div class="rc-info">策略: '+modeLabel+' | 输出: '+fmtSize(blob.size)+'</div>';
-      var url = URL.createObjectURL(blob);
-      var dl = document.createElement('a');
-      dl.href = url; dl.className = 'btn-dl';
-      dl.download = item.file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
-      dl.innerHTML = '&#11015; 下载';
-      card.appendChild(dl);
-      resultList.appendChild(card);
-
-    } catch(e) {
-      item.status = 'error';
-      item.error = e.message || '处理失败';
-      var card = document.createElement('div');
-      card.className = 'result-card rc-error';
-      card.innerHTML = '<div class="rc-head"><span class="rc-filename">'+esc(item.file.name)+'</span><span class="rc-badge badge-error">失败</span></div><div class="rc-info" style="color:var(--red)">'+esc(item.error)+'</div>';
-      resultList.appendChild(card);
+      completedCopies++;
+      var overallPct = Math.round(completedCopies / totalCopies * 100);
+      progressText.textContent = '总进度 ' + overallPct + '%（' + completedCopies + '/' + totalCopies + '）';
     }
 
-    completedItems++;
+    // 检查该视频是否有至少一份成功
+    var hasSuccess = item.results.some(function(r){return r !== null});
+    item.status = hasSuccess ? 'done' : 'error';
     renderFileList();
   }
 
@@ -721,26 +775,38 @@ startBtn.addEventListener('click', async function() {
   isProcessing = false;
   updateStartBtn();
 
-  // 显示"下载全部"按钮
-  var doneItems = fileItems.filter(function(f){return f.status === 'done' && f.result});
-  if (doneItems.length > 1) {
+  // 显示"下载全部"按钮（多于1个成功结果时显示）
+  var totalResults = 0;
+  for (var i = 0; i < fileItems.length; i++) {
+    if (fileItems[i].results) {
+      for (var j = 0; j < fileItems[i].results.length; j++) {
+        if (fileItems[i].results[j]) totalResults++;
+      }
+    }
+  }
+  if (totalResults > 1) {
     document.getElementById('downloadAllWrap').style.display = '';
   }
 });
 
 document.getElementById('downloadAllBtn').addEventListener('click', function() {
-  var doneItems = fileItems.filter(function(f){return f.status === 'done' && f.result});
-  for (var i = 0; i < doneItems.length; i++) {
-    var item = doneItems[i];
-    var url = URL.createObjectURL(item.result.blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = item.file.name.replace(/(\.[^.]+)$/,'_newmd5$1');
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // 延迟释放，避免下载未开始就释放
-    (function(u){setTimeout(function(){URL.revokeObjectURL(u)},10000)})(url);
+  for (var i = 0; i < fileItems.length; i++) {
+    var item = fileItems[i];
+    if (!item.results) continue;
+    for (var j = 0; j < item.results.length; j++) {
+      var r = item.results[j];
+      if (!r) continue;
+      var url = URL.createObjectURL(r.blob);
+      var a = document.createElement('a');
+      a.href = url;
+      var ext = item.file.name.match(/(\.[^.]+)$/);
+      var baseName = item.file.name.replace(/(\.[^.]+)$/, '');
+      a.download = item.results.length > 1 ? baseName + '_v' + (j+1) + (ext ? ext[1] : '.mp4') : baseName + '_newmd5' + (ext ? ext[1] : '.mp4');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      (function(u){setTimeout(function(){URL.revokeObjectURL(u)},10000)})(url);
+    }
   }
 });
 
